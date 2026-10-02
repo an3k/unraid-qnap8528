@@ -14,26 +14,9 @@
 
 <CHANGES>
 
-###2023.06.10
-- Update README.md - thank you GitHub user MPritsch
-
-###2023.09.11
-- Add TS-464 to supported list and TS464.md to repository - thank you GitHub user 0xFoxx
-
-###2023.07.25
-- Fixed typo, thanks to user -C- from the unRAID Forums
-- Added TS-453A to known supported units list, thanks to user Lavoslav from the unRAID Forums
-
-###2022.07.21
-- Version detection from package via GitHub API
-- Save md5 in packages directory
-
-###2022.07.19
-- Necessary changes for unRAID 6.11+
-- Cleanup
-
-###2022.05.30
+###2026.10.02
 - Initial release
+- qnap8528 v1.24b package for Unraid Kernel 6.18.38-Unraid
 
 </CHANGES>
 
@@ -41,7 +24,7 @@
 <INLINE>
 **QNAP8528**
 
-This package contains and installs the QNAP IT8528 Embedded Controller Kernel module, this allows you to read fan speeds and temperatures as well as reading and writing the fan PWM values from the ITE Tech Inc. IT8528 embedded controller chip.  
+This package contains and installs the qnap8528 Kernel module, this allows you to read fan speeds and temperatures as well as reading and writing the fan PWM values from the ITE Tech Inc. IT8528 embedded controller chip.  
 Currently known supported units are listed in the upstream repository: [Supported Models](https://github.com/0xGiddi/qnap8528#supported-models)
 
 Source: https://github.com/0xGiddi/qnap8528
@@ -54,7 +37,12 @@ Source: https://github.com/0xGiddi/qnap8528
 download() {
 # Download QNAP8528 package
 if wget -q -nc --show-progress --progress=bar:force:noscroll -O "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}" "${DL_URL}/${LAT_PACKAGE}" ; then
-  wget -q -nc --show-progress --progress=bar:force:noscroll -O "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}.md5" "${DL_URL}/${LAT_PACKAGE}.md5"
+  if ! wget -q -nc --show-progress --progress=bar:force:noscroll -O "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}.md5" "${DL_URL}/${LAT_PACKAGE}.md5" ; then
+    echo
+    echo "--------------------Can't download QNAP8528 checksum-----------------------"
+    rm -rf &plugin; &emhttp;
+    exit 1
+  fi
   if [ "$(md5sum &packages;/${KERNEL_V%%-*}/${LAT_PACKAGE} | awk '{print $1}')" != "$(cat &packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}.md5 | awk '{print $1}')" ]; then
     echo
     echo "---CHECKSUM ERROR!---"
@@ -72,8 +60,15 @@ fi
 }
 
 check() {
-if ! ls -1 &packages;/${KERNEL_V%%-*}/ | grep -q "${PACKAGE}" ; then
-  LAT_PACKAGE="$(wget -qO- https://api.github.com/repos/an3k/unraid-qnap8528/releases/tags/${KERNEL_V} | jq -r '.assets[].name' | grep "${PACKAGE}" | grep -E -v '\.md5$' | sort -V | tail -1)"
+LAT_PACKAGE="$(wget -qO- https://api.github.com/repos/an3k/unraid-qnap8528/releases/tags/${KERNEL_V} | jq -r '.assets[].name' 2&gt;/dev/null | grep "^${PACKAGE}-" | grep -E '\.txz$' | sort -V | tail -1)"
+if [ -z "${LAT_PACKAGE}" ]; then
+  echo
+  echo "----------------No QNAP8528 package found for this Kernel-------------------"
+  rm -rf &plugin; &emhttp;
+  exit 1
+fi
+if [ ! -f "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}" ] || [ ! -f "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}.md5" ] || [ "$(md5sum &packages;/${KERNEL_V%%-*}/${LAT_PACKAGE} | awk '{print $1}')" != "$(cat &packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}.md5 2&gt;/dev/null | awk '{print $1}')" ]; then
+  rm -f "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}" "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}.md5"
   echo
   echo "-----------------------Downloading QNAP8528 package!-------------------------"
   echo "--------This could take some time, please don't close this window!----------"
@@ -86,13 +81,24 @@ fi
 
 install() {
 # Install QNAP8528 package
-/sbin/installpkg "&packages;/${KERNEL_V%%-*}/${PACKAGE}*.txz" 2&gt;/dev/null
-depmod -a 2&gt;/dev/null
+if ! /sbin/installpkg "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}" 2&gt;/dev/null ; then
+  echo
+  echo "-----------------------Can't install QNAP8528 package------------------------"
+  exit 1
+fi
+if ! depmod -a 2&gt;/dev/null ; then
+  echo
+  echo "------------------------------depmod failed----------------------------------"
+  exit 1
+fi
 }
 
 activate() {
 # Modprobe module
-/sbin/modprobe qnap8528 || echo "-Error loading module, please post your Diagnostics on the support thread!-"
+if ! /sbin/modprobe qnap8528 ; then
+  echo "-Error loading module, please post your Diagnostics at https://github.com/an3k/unraid-qnap8528/issues!-"
+  exit 1
+fi
 }
 
 # Define Variables
