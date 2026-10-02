@@ -10,13 +10,30 @@
   <!ENTITY packages  "/boot/config/plugins/&name;/packages">
 ]>
 
-<PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="7.3.2" support="https://github.com/&author;/unraid-qnap8528/issues">
+<PLUGIN  name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="6.10.2" support="https://github.com/&author;/unraid-qnap8528/issues">
 
 <CHANGES>
 
-###2026.10.02
-- Initial Unraid packaging for 0xGiddi/qnap8528
-- Initial package built for Unraid 7.3.2 / 6.18.38-Unraid
+###2023.06.10
+- Update README.md - thank you GitHub user MPritsch
+
+###2023.09.11
+- Add TS-464 to supported list and TS464.md to repository - thank you GitHub user 0xFoxx
+
+###2023.07.25
+- Fixed typo, thanks to user -C- from the unRAID Forums
+- Added TS-453A to known supported units list, thanks to user Lavoslav from the unRAID Forums
+
+###2022.07.21
+- Version detection from package via GitHub API
+- Save md5 in packages directory
+
+###2022.07.19
+- Necessary changes for unRAID 6.11+
+- Cleanup
+
+###2022.05.30
+- Initial release
 
 </CHANGES>
 
@@ -24,11 +41,10 @@
 <INLINE>
 **QNAP8528**
 
-Unraid package for the qnap8528 kernel driver by 0xGiddi.
+This package contains and installs the QNAP IT8528 Embedded Controller Kernel module, this allows you to read fan speeds and temperatures as well as reading and writing the fan PWM values from the ITE Tech Inc. IT8528 embedded controller chip.  
+Currently known supported units are listed in the upstream repository: [Supported Models](https://github.com/0xGiddi/qnap8528#supported-models)
 
-The driver exposes supported QNAP IT8528 embedded-controller functions through standard Linux subsystems, including hwmon fan/temperature reporting and PWM control.
-
-Upstream source: https://github.com/0xGiddi/qnap8528
+Source: https://github.com/0xGiddi/qnap8528
 </INLINE>
 </FILE>
 
@@ -36,79 +52,64 @@ Upstream source: https://github.com/0xGiddi/qnap8528
 <INLINE>
 
 download() {
-  if wget -q -nc --show-progress --progress=bar:force:noscroll \
-      -O "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}" \
-      "${DL_URL}/${LAT_PACKAGE}" ; then
-
-    wget -q -nc \
-      -O "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}.md5" \
-      "${DL_URL}/${LAT_PACKAGE}.md5"
-
-    if [ "$(md5sum "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}" | awk '{print $1}')" != \
-         "$(awk '{print $1}' "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}.md5")" ]; then
-      echo
-      echo "---------------------------CHECKSUM ERROR!---------------------------"
-      rm -rf "&plugin;" "&emhttp;"
-      exit 1
-    fi
-
+# Download QNAP8528 package
+if wget -q -nc --show-progress --progress=bar:force:noscroll -O "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}" "${DL_URL}/${LAT_PACKAGE}" ; then
+  wget -q -nc --show-progress --progress=bar:force:noscroll -O "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}.md5" "${DL_URL}/${LAT_PACKAGE}.md5"
+  if [ "$(md5sum &packages;/${KERNEL_V%%-*}/${LAT_PACKAGE} | awk '{print $1}')" != "$(cat &packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}.md5 | awk '{print $1}')" ]; then
     echo
-    echo "----------------Successfully downloaded QNAP8528 package-------------"
-  else
-    echo
-    echo "--------------------Can't download QNAP8528 package-------------------"
-    rm -rf "&plugin;" "&emhttp;"
+    echo "---CHECKSUM ERROR!---"
+    rm -rf &plugin; &emhttp;
     exit 1
   fi
+  echo
+  echo "-------------------Sucessfully downloaded QNAP8528 package-------------------"
+else
+  echo
+  echo "-----------------------Can't download QNAP8528 package-----------------------"
+  rm -rf &plugin; &emhttp;
+  exit 1
+fi
 }
 
 check() {
-  if ! ls -1 "&packages;/${KERNEL_V%%-*}/" 2>/dev/null | grep -q "${PACKAGE}" ; then
-    LAT_PACKAGE="$(
-      wget -qO- "https://api.github.com/repos/&author;/unraid-qnap8528/releases/tags/${KERNEL_V}" \
-      | jq -r '.assets[].name' \
-      | grep "${PACKAGE}" \
-      | grep -E -v '\.md5$' \
-      | sort -V \
-      | tail -1
-    )"
-
-    if [ -z "${LAT_PACKAGE}" ]; then
-      echo
-      echo "No QNAP8528 package found for kernel ${KERNEL_V}."
-      exit 1
-    fi
-
-    echo
-    echo "--------------------Downloading QNAP8528 package----------------------"
-    download
-  else
-    echo
-    echo "--------------------QNAP8528 package found locally--------------------"
-  fi
+if ! ls -1 &packages;/${KERNEL_V%%-*}/ | grep -q "${PACKAGE}" ; then
+  LAT_PACKAGE="$(wget -qO- https://api.github.com/repos/an3k/unraid-qnap8528/releases/tags/${KERNEL_V} | jq -r '.assets[].name' | grep "${PACKAGE}" | grep -E -v '\.md5$' | sort -V | tail -1)"
+  echo
+  echo "-----------------------Downloading QNAP8528 package!-------------------------"
+  echo "--------This could take some time, please don't close this window!----------"
+  download
+else
+  echo
+  echo "-----------------------QNAP8528 package found locally------------------------"
+fi
 }
 
 install() {
-  /sbin/installpkg "&packages;/${KERNEL_V%%-*}/${PACKAGE}"*.txz 2>/dev/null
-  /sbin/depmod -a 2>/dev/null
+# Install QNAP8528 package
+/sbin/installpkg "&packages;/${KERNEL_V%%-*}/${PACKAGE}*.txz" 2&gt;/dev/null
+depmod -a 2&gt;/dev/null
 }
 
 activate() {
-  /sbin/modprobe qnap8528 || \
-    echo "-Error loading qnap8528; check Diagnostics/dmesg-"
+# Modprobe module
+/sbin/modprobe qnap8528 || echo "-Error loading module, please post your Diagnostics on the support thread!-"
 }
 
+# Define Variables
 KERNEL_V="$(uname -r)"
 PACKAGE="qnap8528"
-DL_URL="https://github.com/&author;/unraid-qnap8528/releases/download/${KERNEL_V}"
+DL_URL="https://github.com/an3k/unraid-qnap8528/releases/download/$KERNEL_V"
 
-mkdir -p "&packages;/${KERNEL_V%%-*}"
+if [ ! -d "&packages;/${KERNEL_V%%-*}" ]; then
+  mkdir -p "&packages;/${KERNEL_V%%-*}"
+fi
 
-rm -rf $(ls -d "&packages;"/* 2>/dev/null | grep -v "${KERNEL_V%%-*}")
+# Check for old packages
+rm -rf $(ls -d &packages;/* | grep -v "${KERNEL_V%%-*}")
 
+# Check if QNAP8528 package is already downloaded and installed
 check
-
-if ! modinfo qnap8528 -0 >/dev/null 2>&1 ; then
+if ! modinfo qnap8528 -0 >/dev/null 2&gt;&amp;1 ; then
   install
   activate
 else
@@ -116,7 +117,7 @@ else
 fi
 
 echo
-echo "----------------Installation of QNAP8528 package successful-----------"
+echo "---------------Installation of QNAP8528 package successful-------------------"
 echo
 
 </INLINE>
@@ -125,17 +126,16 @@ echo
 <FILE Run="/bin/bash" Method="remove">
 <INLINE>
 
-echo "-------------------------"
-echo "---Uninstalling QNAP8528-"
-echo "-------------------------"
-
-rm -rf "&emhttp;"
-rm -rf "&plugin;"
-
+echo "--------------------------"
+echo "---Uninstalling QNAP8528---"
+echo "--------------------------"
+# Remove plugin related files
+rm -rf &emhttp;
+rm -rf &plugin;
 echo
-echo "--------------------------------------------------------"
+echo "-----------------------------------------------------"
 echo "---QNAP8528 uninstalled, please reboot your server!---"
-echo "--------------------------------------------------------"
+echo "-----------------------------------------------------"
 echo
 
 </INLINE>
