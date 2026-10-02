@@ -10,7 +10,7 @@
   <!ENTITY packages  "/boot/config/plugins/&name;/packages">
 ]>
 
-<PLUGIN  name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="6.10.2" support="https://github.com/&author;/unraid-qnap8528/issues">
+<PLUGIN  name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="7.3.2" support="https://github.com/&author;/unraid-qnap8528/issues">
 
 <CHANGES>
 
@@ -119,6 +119,7 @@ if ! modinfo qnap8528 -0 >/dev/null 2&gt;&amp;1 ; then
   install
   activate
 else
+  install
   activate
 fi
 
